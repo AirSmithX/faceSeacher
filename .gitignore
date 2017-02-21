@@ -1,0 +1,6 @@
+logs_*
+*.pyc
+*.swp
+checkpoint/
+checkpoint_parallel/
+log/
