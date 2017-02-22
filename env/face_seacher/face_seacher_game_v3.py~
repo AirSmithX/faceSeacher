@@ -42,7 +42,6 @@ class FaceSeacherEnv_v3(gym.Env):
         self.scope = scope
 
     def __init__(self):
-        self.declay = 0.00460517
         self.scope = "scope"
         self.reward_old = None
         self.xml_phrazer = xml_ananysizer.xmlPhrazer()
@@ -99,7 +98,7 @@ class FaceSeacherEnv_v3(gym.Env):
         self.draw_count -= 1
 
     def _step(self,u):
-        u = np.clip(u,-1,1)*40
+        u = np.clip(u,-2,2)
 
         # u = u * (pm.MOVEMENT_SCALE * self.obs_width)
 
@@ -151,10 +150,10 @@ class FaceSeacherEnv_v3(gym.Env):
             self.reward_old = rewards
 
 
-        # if actual_reward > pm.MAX_REWARD:
-        #     actual_reward = pm.MAX_REWARD
-        # if actual_reward < -pm.MAX_REWARD:
-        #     actual_reward = -pm.MAX_REWARD
+        if actual_reward > pm.MAX_REWARD:
+            actual_reward = pm.MAX_REWARD
+        if actual_reward < -pm.MAX_REWARD:
+            actual_reward = -pm.MAX_REWARD
 
 
         if rewards > 90:
@@ -228,42 +227,35 @@ class FaceSeacherEnv_v3(gym.Env):
             self.__rect = self.xml_phrazer.phraze_xml(xml_name)
             if self.__rect:
                 # find a face
-                # img = cv2.cvtColor(self.__env_img, cv2.COLOR_BGR2RGB)
-                # dets = self.__detector(img, 1)
+                img = cv2.cvtColor(self.__env_img, cv2.COLOR_BGR2RGB)
+                dets = self.__detector(img, 1)
+                if dets:
+                    self.__det = dets[0]
+                    self.obs_width = int((self.__det.right() - self.__det.left()) * pm.OBS_SCALE)
+                    self.obs_heigh = int((self.__det.bottom() - self.__det.top()) * pm.OBS_SCALE)
+                    if self.obs_width < self.obs_heigh:
+                        self.obs_heigh = self.obs_width
+                    else:
+                        self.obs_width = self.obs_heigh
 
-                # print dets[0]
+                    # self.__seg_img, self.__rect = ut.connection_area(self.__seg_img, (center_x, center_y))
+                    # self.curr_x, self.curr_y = ut.generate_location(self.__seg_img, self.__rect, self.obs_width, self.obs_heigh, self.env_width, self.env_heigh)
+                    # rect = self.xml_phrazer()
+                    self.curr_x = int(random.uniform(self.__rect[0], self.__rect[2] - self.obs_width))
+                    self.curr_y = int(random.uniform(self.__rect[1], self.__rect[3] - self.obs_heigh))
 
-                # if dets:
-                # self.__det = dets[0]
-                # self.obs_width = int((self.__det.right() - self.__det.left()) * pm.OBS_SCALE)
-                # self.obs_heigh = int((self.__det.bottom() - self.__det.top()) * pm.OBS_SCALE)
+                    self.obs_img = self.__env_img[self.curr_y: self.curr_y + self.obs_heigh,
+                                   self.curr_x: self.curr_x + self.obs_width]
 
-                self.obs_width = 180
-                self.obs_heigh = 180
-
-                self.target_x = 160
-                self.target_y = 131
-
-                # if self.obs_width < self.obs_heigh:
-                #     self.obs_heigh = self.obs_width
-                # else:
-                #     self.obs_width = self.obs_heigh
-
-                # self.__seg_img, self.__rect = ut.connection_area(self.__seg_img, (center_x, center_y))
-                # self.curr_x, self.curr_y = ut.generate_location(self.__seg_img, self.__rect, self.obs_width, self.obs_heigh, self.env_width, self.env_heigh)
-                # rect = self.xml_phrazer()
-                self.curr_x = int(random.uniform(self.__rect[0], self.__rect[2] - self.obs_width))
-                self.curr_y = int(random.uniform(self.__rect[1], self.__rect[3] - self.obs_heigh))
-
-                self.obs_img = self.__env_img[self.curr_y: self.curr_y + self.obs_heigh,
-                               self.curr_x: self.curr_x + self.obs_width]
-
-                self.draw_img = self.__env_img.copy()
-                cv2.circle(self.draw_img, (self.curr_x + self.obs_heigh / 2, self.curr_y + self.obs_width / 2), 20,
-                           (0, 255, 0), 12)
-                if self.obs_img.shape[0] > 0 and self.obs_img.shape[1] > 0:
-                    self.obs_img = cv2.resize(cv2.cvtColor(self.obs_img, cv2.COLOR_RGB2GRAY), (100, 100))
-                    break
+                    self.draw_img = self.__env_img.copy()
+                    cv2.circle(self.draw_img, (self.curr_x + self.obs_heigh / 2, self.curr_y + self.obs_width / 2), 20,
+                               (0, 255, 0), 12)
+                    if self.obs_img.shape[0] > 0 and self.obs_img.shape[1] > 0:
+                        self.obs_img = cv2.resize(cv2.cvtColor(self.obs_img, cv2.COLOR_RGB2GRAY), (100, 100))
+                        self.declay = -1.0/(self.obs_width * 4.0)
+                        break
+                    else:
+                        pass
                 else:
                     pass
             else:
@@ -290,14 +282,14 @@ class FaceSeacherEnv_v3(gym.Env):
 
 
     def canculate_rewards(self):
-        # center_x = (self.__det.left() + self.__det.right())/2
-        # center_y = (self.__det.bottom() + self.__det.top())/2
+        center_x = (self.__det.left() + self.__det.right())/2
+        center_y = (self.__det.bottom() + self.__det.top())/2
         center_obs_x = self.curr_x + self.obs_width /2
         center_obs_y = self.curr_y + self.obs_heigh /2
 
-        center_dis = math.sqrt(math.pow(self.target_x - center_obs_x, 2) + math.pow(self.target_y - center_obs_y, 2))
-        dis_reward = math.exp(-self.declay * center_dis)*100
-        # rewards += area_rewardmath.sqrt
+        center_dis = math.sqrt(math.pow(center_x - center_obs_x, 2) + math.pow(center_y - center_obs_y, 2))
+        dis_reward = math.exp(self.declay * center_dis)*100
+        # rewards += area_reward
         return  dis_reward
 
     def save_draw_image(self):
